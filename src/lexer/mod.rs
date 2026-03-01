@@ -1,3 +1,5 @@
+pub mod lexer;
 pub mod token;
 
-// Lexer implementation will be added in Phase 3.
+pub use lexer::{tokenize, Lexer};
+pub use token::{Token, TokenKind};
