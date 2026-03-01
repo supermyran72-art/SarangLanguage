@@ -472,3 +472,160 @@ fn lower_roundtrip_coding_assistant_json() {
     let roundtrip: ir::PolicyIr = serde_json::from_str(&json).unwrap();
     assert_eq!(ir, roundtrip);
 }
+
+// ── Emit integration tests ─────────────────────────────────────
+
+fn compile_file(path: &str) -> String {
+    let ir = lower_file(path);
+    sarang::emit::emit_json_pretty(&ir).expect("emit should succeed")
+}
+
+#[test]
+fn emit_basic_agent_json() {
+    let json = compile_file("examples/basic_agent.sarang");
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed["version"], "0.1.0");
+    assert_eq!(parsed["agent"]["name"], "BasicAssistant");
+    assert!(parsed["agent"]["models"].is_array());
+}
+
+#[test]
+fn emit_coding_assistant_json_has_all_sections() {
+    let json = compile_file("examples/coding_assistant.sarang");
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let agent = &parsed["agent"];
+    assert!(agent["models"].is_array());
+    assert!(agent["fallbacks"].is_array());
+    assert!(agent["tools"].is_array());
+    assert!(agent["evidence"].is_object());
+    assert!(agent["verify"].is_object());
+    assert!(agent["safety"].is_object());
+    assert!(agent["memory"].is_object());
+    assert!(agent["output"].is_object());
+    assert!(agent["budget"].is_object());
+}
+
+#[test]
+fn emit_minimal_json_omits_optional_sections() {
+    let json = compile_file("testdata/valid/minimal.sarang");
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let agent = &parsed["agent"];
+    assert!(agent.get("fallbacks").is_none());
+    assert!(agent.get("tools").is_none());
+    assert!(agent.get("evidence").is_none());
+    assert!(agent.get("verify").is_none());
+    assert!(agent.get("safety").is_none());
+    assert!(agent.get("memory").is_none());
+    assert!(agent.get("output").is_none());
+    assert!(agent.get("budget").is_none());
+}
+
+#[test]
+fn emit_research_agent_roundtrip() {
+    let ir = lower_file("examples/research_agent.sarang");
+    let json = sarang::emit::emit_json(&ir).unwrap();
+    let roundtrip: ir::PolicyIr = serde_json::from_str(&json).unwrap();
+    assert_eq!(ir, roundtrip);
+}
+
+// ── CLI integration tests ──────────────────────────────────────
+
+use std::process::Command as CliCommand;
+
+fn cargo_bin() -> CliCommand {
+    CliCommand::new(env!("CARGO_BIN_EXE_sarang"))
+}
+
+#[test]
+fn cli_version() {
+    let output = cargo_bin().arg("version").output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.starts_with("sarang "));
+}
+
+#[test]
+fn cli_check_valid_file() {
+    let output = cargo_bin()
+        .args(["check", "examples/basic_agent.sarang"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("ok:"));
+}
+
+#[test]
+fn cli_check_invalid_file_exits_nonzero() {
+    let output = cargo_bin()
+        .args(["check", "testdata/invalid/missing_model.sarang"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("missing a required `model` block"));
+}
+
+#[test]
+fn cli_compile_to_stdout() {
+    let output = cargo_bin()
+        .args(["compile", "examples/basic_agent.sarang"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["version"], "0.1.0");
+    assert_eq!(parsed["agent"]["name"], "BasicAssistant");
+}
+
+#[test]
+fn cli_compile_to_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let out_path = dir.path().join("output.json");
+    let output = cargo_bin()
+        .args([
+            "compile",
+            "examples/coding_assistant.sarang",
+            "-o",
+            out_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let json = std::fs::read_to_string(&out_path).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed["agent"]["name"], "CodingAssistant");
+}
+
+#[test]
+fn cli_compile_invalid_file_exits_nonzero() {
+    let output = cargo_bin()
+        .args(["compile", "testdata/invalid/bad_tool_action.sarang"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+}
+
+#[test]
+fn cli_check_nonexistent_file() {
+    let output = cargo_bin()
+        .args(["check", "nonexistent.sarang"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("file not found"));
+}
+
+#[test]
+fn cli_inspect_prints_ast() {
+    let output = cargo_bin()
+        .args(["inspect", "testdata/valid/minimal.sarang"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("Program"));
+    assert!(stdout.contains("AgentDef"));
+}
