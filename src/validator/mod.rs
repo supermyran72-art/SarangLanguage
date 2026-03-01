@@ -1,1 +1,3 @@
-// Semantic validator will be added in Phase 6.
+pub mod validator;
+
+pub use validator::{validate, Validator};

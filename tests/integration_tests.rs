@@ -2,6 +2,7 @@ use sarang::common::span::{SourceFile, Span};
 use sarang::diagnostics::report::{Diagnostic, DiagnosticBag};
 use sarang::lexer::{tokenize, TokenKind};
 use sarang::parser::{self, AgentBlock, Value};
+use sarang::validator;
 
 // ── Span integration tests ──────────────────────────────────────
 
@@ -278,4 +279,99 @@ fn parse_testdata_invalid_missing_model() {
     // The parser should succeed here.
     let result = parser::parse(&source);
     assert!(result.is_ok(), "syntactically valid file should parse");
+}
+
+// ── Validator integration tests ─────────────────────────────────
+
+fn validate_file(path: &str) -> DiagnosticBag {
+    let source = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("{path} should exist"));
+    let program = parser::parse(&source).unwrap_or_else(|diags| {
+        let sf = SourceFile::new(path, &source);
+        panic!("parse failed for {path}:\n{}", diags.render_to_string(&sf));
+    });
+    validator::validate(&program)
+}
+
+#[test]
+fn validate_example_basic_agent_passes() {
+    let diags = validate_file("examples/basic_agent.sarang");
+    assert!(
+        !diags.has_errors(),
+        "basic_agent.sarang should be valid: {:?}",
+        diags.iter().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn validate_example_coding_assistant_passes() {
+    let diags = validate_file("examples/coding_assistant.sarang");
+    assert!(
+        !diags.has_errors(),
+        "coding_assistant.sarang should be valid: {:?}",
+        diags.iter().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn validate_example_research_agent_passes() {
+    let diags = validate_file("examples/research_agent.sarang");
+    assert!(
+        !diags.has_errors(),
+        "research_agent.sarang should be valid: {:?}",
+        diags.iter().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn validate_testdata_valid_minimal_passes() {
+    let diags = validate_file("testdata/valid/minimal.sarang");
+    assert!(
+        !diags.has_errors(),
+        "minimal.sarang should be valid: {:?}",
+        diags.iter().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn validate_testdata_missing_model_fails() {
+    let diags = validate_file("testdata/invalid/missing_model.sarang");
+    assert!(diags.has_errors(), "missing_model.sarang should fail validation");
+    let msgs: Vec<_> = diags.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        msgs.iter().any(|m| m.contains("missing a required `model` block")),
+        "expected missing model error: {msgs:?}"
+    );
+}
+
+#[test]
+fn validate_testdata_duplicate_safety_fails() {
+    let diags = validate_file("testdata/invalid/duplicate_safety.sarang");
+    assert!(diags.has_errors());
+    let msgs: Vec<_> = diags.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        msgs.iter().any(|m| m.contains("duplicate `safety` block")),
+        "expected duplicate safety error: {msgs:?}"
+    );
+}
+
+#[test]
+fn validate_testdata_bad_tool_action_fails() {
+    let diags = validate_file("testdata/invalid/bad_tool_action.sarang");
+    assert!(diags.has_errors());
+    let msgs: Vec<_> = diags.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        msgs.iter().any(|m| m.contains("invalid tool action")),
+        "expected invalid action error: {msgs:?}"
+    );
+}
+
+#[test]
+fn validate_testdata_unknown_field_fails() {
+    let diags = validate_file("testdata/invalid/unknown_field.sarang");
+    assert!(diags.has_errors());
+    let msgs: Vec<_> = diags.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        msgs.iter().any(|m| m.contains("unknown field `flavor`")),
+        "expected unknown field error: {msgs:?}"
+    );
 }

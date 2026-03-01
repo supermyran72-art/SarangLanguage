@@ -1,0 +1,16 @@
+// Invalid: duplicate safety blocks.
+
+agent BadAgent {
+    model primary {
+        provider: "openai"
+        name: "gpt-4"
+    }
+
+    safety {
+        block: ["harmful_content"]
+    }
+
+    safety {
+        block: ["pii_leak"]
+    }
+}

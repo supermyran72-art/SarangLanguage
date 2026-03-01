@@ -1,0 +1,12 @@
+// Invalid: tool action is not one of the allowed values.
+
+agent BadAction {
+    model primary {
+        provider: "openai"
+        name: "gpt-4"
+    }
+
+    tool web_search {
+        action: "maybe"
+    }
+}

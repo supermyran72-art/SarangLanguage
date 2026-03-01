@@ -1,0 +1,9 @@
+// Invalid: model block has an unknown field.
+
+agent UnknownField {
+    model primary {
+        provider: "openai"
+        name: "gpt-4"
+        flavor: "spicy"
+    }
+}
