@@ -1,5 +1,6 @@
 use sarang::common::span::{SourceFile, Span};
 use sarang::diagnostics::report::{Diagnostic, DiagnosticBag};
+use sarang::ir;
 use sarang::lexer::{tokenize, TokenKind};
 use sarang::parser::{self, AgentBlock, Value};
 use sarang::validator;
@@ -374,4 +375,100 @@ fn validate_testdata_unknown_field_fails() {
         msgs.iter().any(|m| m.contains("unknown field `flavor`")),
         "expected unknown field error: {msgs:?}"
     );
+}
+
+// ── Lowering integration tests ──────────────────────────────────
+
+fn lower_file(path: &str) -> ir::PolicyIr {
+    let source = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("{path} should exist"));
+    let program = parser::parse(&source).unwrap_or_else(|diags| {
+        let sf = SourceFile::new(path, &source);
+        panic!("parse failed for {path}:\n{}", diags.render_to_string(&sf));
+    });
+    let diags = validator::validate(&program);
+    assert!(
+        !diags.has_errors(),
+        "validation failed for {path}: {:?}",
+        diags.iter().collect::<Vec<_>>()
+    );
+    ir::lower(&program).unwrap_or_else(|e| panic!("lowering failed for {path}: {e}"))
+}
+
+#[test]
+fn lower_example_basic_agent() {
+    let ir = lower_file("examples/basic_agent.sarang");
+    assert_eq!(ir.version, "0.1.0");
+    assert_eq!(ir.agent.name, "BasicAssistant");
+    assert_eq!(ir.agent.models.len(), 1);
+    assert_eq!(ir.agent.models[0].provider, "openai");
+    assert!(ir.agent.safety.is_some());
+    assert!(ir.agent.output.is_some());
+}
+
+#[test]
+fn lower_example_coding_assistant() {
+    let ir = lower_file("examples/coding_assistant.sarang");
+    assert_eq!(ir.agent.name, "CodingAssistant");
+    assert_eq!(ir.agent.models.len(), 1);
+    assert_eq!(ir.agent.models[0].provider, "anthropic");
+    assert_eq!(ir.agent.models[0].temperature, Some(0.3));
+    assert_eq!(ir.agent.fallbacks.len(), 1);
+    assert_eq!(ir.agent.tools.len(), 3);
+    assert_eq!(ir.agent.tools[0].action, ir::ToolAction::Allow);
+    assert_eq!(ir.agent.tools[1].action, ir::ToolAction::RequireApproval);
+    assert_eq!(ir.agent.tools[2].action, ir::ToolAction::Deny);
+
+    let ev = ir.agent.evidence.as_ref().unwrap();
+    assert_eq!(ev.require, vec!["source_file", "line_number"]);
+    assert_eq!(ev.min_sources, Some(1));
+
+    let vf = ir.agent.verify.as_ref().unwrap();
+    assert_eq!(vf.rules.len(), 2);
+
+    let mem = ir.agent.memory.as_ref().unwrap();
+    assert_eq!(mem.read, Some(ir::MemoryAccess::Allow));
+    assert_eq!(mem.write, Some(ir::MemoryWriteAccess::Scoped));
+    assert_eq!(mem.max_entries, Some(100));
+
+    let bud = ir.agent.budget.as_ref().unwrap();
+    assert_eq!(bud.max_tokens, Some(100000));
+    assert_eq!(bud.max_cost_usd, Some(1.0));
+    assert_eq!(bud.max_time_seconds, Some(120));
+}
+
+#[test]
+fn lower_example_research_agent() {
+    let ir = lower_file("examples/research_agent.sarang");
+    assert_eq!(ir.agent.name, "ResearchAgent");
+    assert_eq!(ir.agent.tools.len(), 3);
+    assert!(ir.agent.tools.iter().all(|t| t.action == ir::ToolAction::Allow));
+    assert!(ir.agent.tools.iter().all(|t| t.require_evidence == Some(true)));
+
+    let ev = ir.agent.evidence.as_ref().unwrap();
+    assert_eq!(ev.require, vec!["url", "title", "retrieved_at"]);
+    assert_eq!(ev.min_sources, Some(3));
+
+    let vf = ir.agent.verify.as_ref().unwrap();
+    assert_eq!(vf.rules.len(), 3);
+
+    let mem = ir.agent.memory.as_ref().unwrap();
+    assert_eq!(mem.write, Some(ir::MemoryWriteAccess::AppendOnly));
+}
+
+#[test]
+fn lower_testdata_valid_minimal() {
+    let ir = lower_file("testdata/valid/minimal.sarang");
+    assert_eq!(ir.agent.name, "Minimal");
+    assert_eq!(ir.agent.models.len(), 1);
+    assert!(ir.agent.fallbacks.is_empty());
+    assert!(ir.agent.tools.is_empty());
+    assert!(ir.agent.evidence.is_none());
+}
+
+#[test]
+fn lower_roundtrip_coding_assistant_json() {
+    let ir = lower_file("examples/coding_assistant.sarang");
+    let json = serde_json::to_string_pretty(&ir).unwrap();
+    let roundtrip: ir::PolicyIr = serde_json::from_str(&json).unwrap();
+    assert_eq!(ir, roundtrip);
 }
