@@ -1,2 +1,5 @@
-// Policy IR types will be defined in Phase 7.
+pub mod policy_ir;
+
+pub use policy_ir::*;
+
 // Lowering (AST → IR) will be added in Phase 8.
