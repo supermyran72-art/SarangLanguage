@@ -1,0 +1,19 @@
+[package]
+name = "sarang"
+version = "0.1.0"
+edition = "2021"
+description = "A high-performance AI-native language for trustworthy AI systems, agent policy definition, tool orchestration, and structured AI behavior."
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+codespan-reporting = "0.11"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

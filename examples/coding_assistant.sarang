@@ -1,0 +1,60 @@
+// A coding assistant agent with tool access and verification rules.
+
+agent CodingAssistant {
+    model primary {
+        provider: "anthropic"
+        name: "claude-sonnet-4-20250514"
+        temperature: 0.3
+    }
+
+    fallback backup {
+        model: "gpt-4"
+        provider: "openai"
+        condition: "primary_unavailable"
+    }
+
+    tool file_read {
+        action: "allow"
+        require_evidence: true
+    }
+
+    tool file_write {
+        action: "require_approval"
+        require_evidence: true
+    }
+
+    tool shell_exec {
+        action: "deny"
+    }
+
+    evidence {
+        require: ["source_file", "line_number"]
+        min_sources: 1
+    }
+
+    verify {
+        rule: "no_hallucinated_imports"
+        rule: "no_undefined_variables"
+    }
+
+    safety {
+        block: ["arbitrary_code_execution", "credential_access"]
+    }
+
+    memory {
+        read: "allow"
+        write: "scoped"
+        max_entries: 100
+    }
+
+    output {
+        format: "markdown"
+        max_tokens: 8192
+    }
+
+    budget {
+        max_tokens: 100000
+        max_cost_usd: 1.00
+        max_time_seconds: 120
+    }
+}

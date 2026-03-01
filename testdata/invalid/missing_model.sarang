@@ -1,0 +1,7 @@
+// Invalid: agent has no model block (should produce a diagnostic).
+
+agent NoModel {
+    safety {
+        block: ["harmful_content"]
+    }
+}

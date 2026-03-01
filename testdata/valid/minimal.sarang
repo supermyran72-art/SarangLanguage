@@ -1,0 +1,8 @@
+// Minimal valid Sarang program: just an agent with a model.
+
+agent Minimal {
+    model default {
+        provider: "openai"
+        name: "gpt-4"
+    }
+}

@@ -1,0 +1,62 @@
+// A research agent with strict evidence and citation requirements.
+
+agent ResearchAgent {
+    model primary {
+        provider: "anthropic"
+        name: "claude-opus-4-20250514"
+        temperature: 0.2
+    }
+
+    fallback backup {
+        model: "gpt-4"
+        provider: "openai"
+        condition: "primary_unavailable"
+    }
+
+    tool web_search {
+        action: "allow"
+        require_evidence: true
+    }
+
+    tool document_read {
+        action: "allow"
+        require_evidence: true
+    }
+
+    tool web_browse {
+        action: "allow"
+        require_evidence: true
+    }
+
+    evidence {
+        require: ["url", "title", "retrieved_at"]
+        min_sources: 3
+    }
+
+    verify {
+        rule: "all_claims_cited"
+        rule: "no_fabricated_sources"
+        rule: "sources_retrievable"
+    }
+
+    safety {
+        block: ["fabricated_citations", "plagiarism"]
+    }
+
+    memory {
+        read: "allow"
+        write: "append_only"
+        max_entries: 500
+    }
+
+    output {
+        format: "markdown"
+        max_tokens: 16384
+    }
+
+    budget {
+        max_tokens: 200000
+        max_cost_usd: 5.00
+        max_time_seconds: 300
+    }
+}
