@@ -1,6 +1,7 @@
 use sarang::common::span::{SourceFile, Span};
 use sarang::diagnostics::report::{Diagnostic, DiagnosticBag};
 use sarang::lexer::{tokenize, TokenKind};
+use sarang::parser::{self, AgentBlock, Value};
 
 // ── Span integration tests ──────────────────────────────────────
 
@@ -189,4 +190,92 @@ fn lexer_matches_manual_tokens_for_simple_source() {
     assert_eq!(tokens[6].kind, TokenKind::RBrace);
     assert_eq!(tokens[7].kind, TokenKind::RBrace);
     assert_eq!(tokens[8].kind, TokenKind::Eof);
+}
+
+// ── Parser integration tests ────────────────────────────────────
+
+fn parse_file_ok(path: &str) -> sarang::parser::Program {
+    let source = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("{path} should exist"));
+    match parser::parse(&source) {
+        Ok(prog) => prog,
+        Err(diags) => {
+            let sf = SourceFile::new(path, &source);
+            panic!("parse failed for {path}:\n{}", diags.render_to_string(&sf));
+        }
+    }
+}
+
+#[test]
+fn parse_example_basic_agent() {
+    let prog = parse_file_ok("examples/basic_agent.sarang");
+    assert_eq!(prog.agent.name.value, "BasicAssistant");
+    assert_eq!(prog.agent.blocks.len(), 3);
+    assert_eq!(prog.agent.blocks[0].keyword(), "model");
+    assert_eq!(prog.agent.blocks[1].keyword(), "safety");
+    assert_eq!(prog.agent.blocks[2].keyword(), "output");
+}
+
+#[test]
+fn parse_example_coding_assistant() {
+    let prog = parse_file_ok("examples/coding_assistant.sarang");
+    assert_eq!(prog.agent.name.value, "CodingAssistant");
+
+    let keywords: Vec<_> = prog.agent.blocks.iter().map(|b| b.keyword()).collect();
+    assert_eq!(
+        keywords,
+        vec![
+            "model", "fallback", "tool", "tool", "tool",
+            "evidence", "verify", "safety", "memory", "output", "budget"
+        ]
+    );
+
+    // Verify a specific tool block
+    if let AgentBlock::Tool(nb) = &prog.agent.blocks[4] {
+        assert_eq!(nb.name.value, "shell_exec");
+        assert_eq!(nb.fields.len(), 1);
+        assert_eq!(nb.fields[0].name.value, "action");
+        if let Value::String(s) = &nb.fields[0].value {
+            assert_eq!(s.value, "deny");
+        }
+    } else {
+        panic!("expected Tool block at index 4");
+    }
+}
+
+#[test]
+fn parse_example_research_agent() {
+    let prog = parse_file_ok("examples/research_agent.sarang");
+    assert_eq!(prog.agent.name.value, "ResearchAgent");
+
+    // Should have: model, fallback, 3 tools, evidence, verify, safety, memory, output, budget
+    assert_eq!(prog.agent.blocks.len(), 11);
+
+    // Verify evidence requires 3 min sources
+    if let AgentBlock::Evidence(ub) = &prog.agent.blocks[5] {
+        let min_sources = &ub.fields[1];
+        assert_eq!(min_sources.name.value, "min_sources");
+        if let Value::Int(n) = &min_sources.value {
+            assert_eq!(n.value, 3);
+        }
+    } else {
+        panic!("expected Evidence at index 5");
+    }
+}
+
+#[test]
+fn parse_testdata_valid_minimal() {
+    let prog = parse_file_ok("testdata/valid/minimal.sarang");
+    assert_eq!(prog.agent.name.value, "Minimal");
+    assert_eq!(prog.agent.blocks.len(), 1);
+}
+
+#[test]
+fn parse_testdata_invalid_missing_model() {
+    let source =
+        std::fs::read_to_string("testdata/invalid/missing_model.sarang").unwrap();
+    // This file is syntactically valid (no parse errors), but
+    // semantically invalid (no model block) — that's the validator's job.
+    // The parser should succeed here.
+    let result = parser::parse(&source);
+    assert!(result.is_ok(), "syntactically valid file should parse");
 }

@@ -1,3 +1,5 @@
 pub mod ast;
+pub mod parser;
 
-// Parser implementation will be added in Phase 5.
+pub use ast::*;
+pub use parser::{parse, Parser};
