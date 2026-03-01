@@ -107,7 +107,7 @@ fn lower_fallback(block: &NamedBlock) -> Result<FallbackConfig> {
 
 fn lower_tool(block: &NamedBlock) -> Result<ToolPolicy> {
     let action_str = require_string(&block.fields, "action", "tool")?;
-    let action = ToolAction::from_str(&action_str).ok_or_else(|| {
+    let action = ToolAction::parse(&action_str).ok_or_else(|| {
         LoweringError::new(format!("invalid tool action `{action_str}`"))
     })?;
     let require_evidence = optional_bool(&block.fields, "require_evidence");
@@ -151,14 +151,14 @@ fn lower_safety(block: &UnnamedBlock) -> Result<SafetyPolicy> {
 
 fn lower_memory(block: &UnnamedBlock) -> Result<MemoryPolicy> {
     let read = match optional_string(&block.fields, "read") {
-        Some(s) => Some(MemoryAccess::from_str(&s).ok_or_else(|| {
+        Some(s) => Some(MemoryAccess::parse(&s).ok_or_else(|| {
             LoweringError::new(format!("invalid memory read policy `{s}`"))
         })?),
         None => None,
     };
 
     let write = match optional_string(&block.fields, "write") {
-        Some(s) => Some(MemoryWriteAccess::from_str(&s).ok_or_else(|| {
+        Some(s) => Some(MemoryWriteAccess::parse(&s).ok_or_else(|| {
             LoweringError::new(format!("invalid memory write policy `{s}`"))
         })?),
         None => None,

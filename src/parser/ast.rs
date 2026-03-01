@@ -233,7 +233,7 @@ mod tests {
         let v = Value::Int(Spanned::new(42, sp(0, 2)));
         assert_eq!(v.span(), sp(0, 2));
 
-        let v = Value::Float(Spanned::new(3.14, sp(5, 9)));
+        let v = Value::Float(Spanned::new(3.125, sp(5, 9)));
         assert_eq!(v.span(), sp(5, 9));
 
         let v = Value::Bool(Spanned::new(true, sp(1, 5)));

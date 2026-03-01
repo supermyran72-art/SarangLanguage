@@ -4,6 +4,7 @@ use sarang::ir;
 use sarang::lexer::{tokenize, TokenKind};
 use sarang::parser::{self, AgentBlock, Value};
 use sarang::validator;
+use sarang::{compile, CompileError};
 
 // ── Span integration tests ──────────────────────────────────────
 
@@ -628,4 +629,139 @@ fn cli_inspect_prints_ast() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("Program"));
     assert!(stdout.contains("AgentDef"));
+}
+
+// ── compile() convenience function tests ────────────────────────
+
+#[test]
+fn compile_fn_basic_agent() {
+    let source = std::fs::read_to_string("examples/basic_agent.sarang").unwrap();
+    let policy = compile(&source).unwrap();
+    assert_eq!(policy.agent.name, "BasicAssistant");
+    assert_eq!(policy.version, "0.1.0");
+}
+
+#[test]
+fn compile_fn_coding_assistant() {
+    let source = std::fs::read_to_string("examples/coding_assistant.sarang").unwrap();
+    let policy = compile(&source).unwrap();
+    assert_eq!(policy.agent.name, "CodingAssistant");
+    assert_eq!(policy.agent.tools.len(), 3);
+}
+
+#[test]
+fn compile_fn_parse_error() {
+    let result = compile("this is not valid sarang");
+    assert!(matches!(result, Err(CompileError::Parse(_))));
+}
+
+#[test]
+fn compile_fn_validation_error() {
+    let source = std::fs::read_to_string("testdata/invalid/missing_model.sarang").unwrap();
+    let result = compile(&source);
+    assert!(matches!(result, Err(CompileError::Validation(_))));
+}
+
+#[test]
+fn compile_error_display() {
+    let err = compile("not sarang").unwrap_err();
+    let msg = format!("{err}");
+    assert!(!msg.is_empty());
+}
+
+// ── Edge-case tests ────────────────────────────────────────────
+
+#[test]
+fn empty_source_is_parse_error() {
+    let result = compile("");
+    assert!(matches!(result, Err(CompileError::Parse(_))));
+}
+
+#[test]
+fn whitespace_only_is_parse_error() {
+    let result = compile("   \n\n\t  \n");
+    assert!(matches!(result, Err(CompileError::Parse(_))));
+}
+
+#[test]
+fn comment_only_is_parse_error() {
+    let result = compile("// just a comment\n// and another\n");
+    assert!(matches!(result, Err(CompileError::Parse(_))));
+}
+
+#[test]
+fn lex_unterminated_string() {
+    let tokens = tokenize("agent Foo { model bar { provider \"open");
+    let has_error = tokens.iter().any(|t| matches!(t.kind, TokenKind::Error(_)));
+    assert!(has_error, "unterminated string should produce an error token");
+}
+
+#[test]
+fn lex_unknown_character() {
+    let tokens = tokenize("agent Foo { model bar { # } }");
+    let has_error = tokens.iter().any(|t| matches!(t.kind, TokenKind::Error(_)));
+    assert!(has_error, "unknown character # should produce an error token");
+}
+
+#[test]
+fn lex_empty_input() {
+    let tokens = tokenize("");
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].kind, TokenKind::Eof);
+}
+
+#[test]
+fn parse_duplicate_fields_in_block() {
+    let source = r#"agent Test {
+        model primary {
+            provider "openai"
+            provider "anthropic"
+        }
+    }"#;
+    // Duplicate fields should either parse successfully (validator catches them)
+    // or produce a parse error — either way, we ensure no panic.
+    let _ = parser::parse(source);
+}
+
+#[test]
+fn validate_agent_with_no_blocks() {
+    let source = "agent Empty {}";
+    let prog = parser::parse(source).unwrap();
+    let diags = validator::validate(&prog);
+    assert!(diags.has_errors(), "agent with no model should fail validation");
+}
+
+#[test]
+fn validate_unknown_block_keyword_is_parse_error() {
+    let source = "agent Foo { widget bar {} }";
+    let result = parser::parse(source);
+    assert!(result.is_err(), "unknown block keyword should fail parsing");
+}
+
+#[test]
+fn cli_wrong_extension() {
+    let output = cargo_bin()
+        .args(["check", "Cargo.toml"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("expected a .sarang file"));
+}
+
+#[test]
+fn compile_fn_roundtrip_json() {
+    let source = std::fs::read_to_string("examples/research_agent.sarang").unwrap();
+    let policy = compile(&source).unwrap();
+    let json = sarang::emit::emit_json_pretty(&policy).unwrap();
+    let roundtrip: ir::PolicyIr = serde_json::from_str(&json).unwrap();
+    assert_eq!(policy, roundtrip);
+}
+
+#[test]
+fn diagnostic_re_exports_accessible() {
+    // Verify the diagnostic re-exports are accessible from the short path
+    let _diag = sarang::diagnostics::Diagnostic::error_no_span("test");
+    let _bag = sarang::diagnostics::DiagnosticBag::new();
+    let _sev = sarang::diagnostics::Severity::Error;
 }

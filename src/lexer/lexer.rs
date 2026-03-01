@@ -497,10 +497,10 @@ mod tests {
     #[test]
     fn simple_floats() {
         assert_eq!(
-            kinds("0.7 3.14 1.00"),
+            kinds("0.7 3.125 1.00"),
             vec![
                 TokenKind::FloatLiteral(0.7),
-                TokenKind::FloatLiteral(3.14),
+                TokenKind::FloatLiteral(3.125),
                 TokenKind::FloatLiteral(1.0),
                 TokenKind::Eof,
             ]

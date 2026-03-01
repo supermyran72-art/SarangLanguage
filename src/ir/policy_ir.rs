@@ -107,7 +107,7 @@ pub enum ToolAction {
 }
 
 impl ToolAction {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "allow" => Some(ToolAction::Allow),
             "deny" => Some(ToolAction::Deny),
@@ -169,7 +169,7 @@ pub enum MemoryAccess {
 }
 
 impl MemoryAccess {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "allow" => Some(MemoryAccess::Allow),
             "deny" => Some(MemoryAccess::Deny),
@@ -188,7 +188,7 @@ pub enum MemoryWriteAccess {
 }
 
 impl MemoryWriteAccess {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "allow" => Some(MemoryWriteAccess::Allow),
             "deny" => Some(MemoryWriteAccess::Deny),
@@ -332,37 +332,37 @@ mod tests {
 
     #[test]
     fn tool_action_from_str() {
-        assert_eq!(ToolAction::from_str("allow"), Some(ToolAction::Allow));
-        assert_eq!(ToolAction::from_str("deny"), Some(ToolAction::Deny));
+        assert_eq!(ToolAction::parse("allow"), Some(ToolAction::Allow));
+        assert_eq!(ToolAction::parse("deny"), Some(ToolAction::Deny));
         assert_eq!(
-            ToolAction::from_str("require_approval"),
+            ToolAction::parse("require_approval"),
             Some(ToolAction::RequireApproval)
         );
-        assert_eq!(ToolAction::from_str("maybe"), None);
+        assert_eq!(ToolAction::parse("maybe"), None);
     }
 
     #[test]
     fn memory_access_from_str() {
-        assert_eq!(MemoryAccess::from_str("allow"), Some(MemoryAccess::Allow));
-        assert_eq!(MemoryAccess::from_str("deny"), Some(MemoryAccess::Deny));
-        assert_eq!(MemoryAccess::from_str("scoped"), None);
+        assert_eq!(MemoryAccess::parse("allow"), Some(MemoryAccess::Allow));
+        assert_eq!(MemoryAccess::parse("deny"), Some(MemoryAccess::Deny));
+        assert_eq!(MemoryAccess::parse("scoped"), None);
     }
 
     #[test]
     fn memory_write_access_from_str() {
         assert_eq!(
-            MemoryWriteAccess::from_str("allow"),
+            MemoryWriteAccess::parse("allow"),
             Some(MemoryWriteAccess::Allow)
         );
         assert_eq!(
-            MemoryWriteAccess::from_str("scoped"),
+            MemoryWriteAccess::parse("scoped"),
             Some(MemoryWriteAccess::Scoped)
         );
         assert_eq!(
-            MemoryWriteAccess::from_str("append_only"),
+            MemoryWriteAccess::parse("append_only"),
             Some(MemoryWriteAccess::AppendOnly)
         );
-        assert_eq!(MemoryWriteAccess::from_str("whatever"), None);
+        assert_eq!(MemoryWriteAccess::parse("whatever"), None);
     }
 
     // ── JSON serialization ──────────────────────────────────

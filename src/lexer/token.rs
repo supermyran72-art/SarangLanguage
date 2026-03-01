@@ -195,7 +195,7 @@ mod tests {
         assert!(TokenKind::False.is_literal());
         assert!(TokenKind::StringLiteral("hi".into()).is_literal());
         assert!(TokenKind::IntLiteral(42).is_literal());
-        assert!(TokenKind::FloatLiteral(3.14).is_literal());
+        assert!(TokenKind::FloatLiteral(3.125).is_literal());
         assert!(!TokenKind::Agent.is_literal());
         assert!(!TokenKind::Ident("x".into()).is_literal());
     }

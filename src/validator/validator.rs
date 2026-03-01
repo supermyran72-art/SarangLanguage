@@ -11,6 +11,12 @@ pub struct Validator {
     pub diagnostics: DiagnosticBag,
 }
 
+impl Default for Validator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Validator {
     pub fn new() -> Self {
         Self {
@@ -219,10 +225,10 @@ impl Validator {
         self.check_unknown_fields(&block.fields, known, "verify");
 
         for field in &block.fields {
-            if field.name.value == "rule" {
-                if !matches!(field.value, Value::String(_)) {
-                    self.type_error("rule", "string", field.value.type_name(), field.name.span);
-                }
+            if field.name.value == "rule"
+                && !matches!(field.value, Value::String(_))
+            {
+                self.type_error("rule", "string", field.value.type_name(), field.name.span);
             }
         }
     }
